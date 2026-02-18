@@ -1,0 +1,46 @@
+name: Verify Maven Version (PR)
+
+on:
+  pull_request:
+    paths:
+      - "versions/maven.json"
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Read version file
+        id: config
+        run: |
+          VERSION=$(jq -r '.version' versions/maven.json)
+          MAKE_DEFAULT=$(jq -r '.make_default' versions/maven.json)
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::error::No version specified in versions/maven.json"
+            exit 1
+          fi
+          echo "maven_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "make_default=${MAKE_DEFAULT}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}, make_default: ${MAKE_DEFAULT}"
+
+      - name: Validate version format
+        run: |
+          VERSION="${{ steps.config.outputs.maven_version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$'; then
+            echo "::error::Invalid version format '${VERSION}' — expected e.g., 4.0.0 or 4.0.0-rc-6"
+            exit 1
+          fi
+
+      - name: Verify download URL exists
+        run: |
+          VERSION="${{ steps.config.outputs.maven_version }}"
+          MAJOR="${VERSION%%.*}"
+          URL="https://dlcdn.apache.org/maven/maven-${MAJOR}/${VERSION}/binaries/apache-maven-${VERSION}-bin.tar.gz"
+          echo "Checking: ${URL}"
+          if ! curl --head --fail --silent --show-error "$URL"; then
+            echo "::error::Maven version ${VERSION} not found — download URL does not exist: ${URL}"
+            echo "Please verify that version ${VERSION} has been released at https://dlcdn.apache.org/maven/maven-${MAJOR}/${VERSION}/"
+            exit 1
+          fi

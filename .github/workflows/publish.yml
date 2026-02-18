@@ -1,0 +1,90 @@
+name: Publish Maven to SDKman
+
+on:
+  workflow_dispatch:
+    inputs:
+      maven_version:
+        description: "Maven version to publish (e.g., 4.0.0)"
+        required: true
+        type: string
+      make_default:
+        description: "Set as SDKman default version"
+        required: false
+        type: boolean
+        default: true
+  push:
+    branches:
+      - main
+    paths:
+      - "versions/maven.json"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Determine version
+        id: config
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.maven_version }}"
+            MAKE_DEFAULT="${{ inputs.make_default }}"
+          else
+            VERSION=$(jq -r '.version' versions/maven.json)
+            MAKE_DEFAULT=$(jq -r '.make_default' versions/maven.json)
+          fi
+          if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
+            echo "::warning::No version specified in versions/maven.json — skipping publish"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          {
+            echo "skip=false"
+            echo "maven_version=${VERSION}"
+            echo "make_default=${MAKE_DEFAULT}"
+          } >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}, make_default: ${MAKE_DEFAULT}"
+
+      - name: Derive download URL
+        if: steps.config.outputs.skip != 'true'
+        id: url
+        run: |
+          VERSION="${{ steps.config.outputs.maven_version }}"
+          MAJOR="${VERSION%%.*}"
+          URL="https://dlcdn.apache.org/maven/maven-${MAJOR}/${VERSION}/binaries/apache-maven-${VERSION}-bin.tar.gz"
+          echo "download_url=${URL}" >> "$GITHUB_OUTPUT"
+          echo "Download URL: ${URL}"
+
+      - name: Verify download URL exists
+        if: steps.config.outputs.skip != 'true'
+        run: |
+          URL="${{ steps.url.outputs.download_url }}"
+          VERSION="${{ steps.config.outputs.maven_version }}"
+          MAJOR="${VERSION%%.*}"
+          if ! curl --head --fail --silent --show-error "$URL"; then
+            echo "::error::Maven version ${VERSION} not found — download URL does not exist: ${URL}"
+            echo "Please verify that version ${VERSION} has been released at https://dlcdn.apache.org/maven/maven-${MAJOR}/${VERSION}/"
+            exit 1
+          fi
+
+      - name: Release to SDKman
+        if: steps.config.outputs.skip != 'true'
+        uses: sdkman/sdkman-release-action@main
+        with:
+          SDKMAN_CONSUMER_KEY: ${{ secrets.SDKMAN_CONSUMER_KEY }}
+          SDKMAN_CONSUMER_TOKEN: ${{ secrets.SDKMAN_CONSUMER_TOKEN }}
+          SDKMAN_CANDIDATE: maven
+          SDKMAN_CANDIDATE_VERSION: ${{ steps.config.outputs.maven_version }}
+          SDKMAN_CANDIDATE_URL: ${{ steps.url.outputs.download_url }}
+          SDKMAN_CANDIDATE_PLATFORM: UNIVERSAL
+
+      - name: Set as SDKman default
+        if: ${{ steps.config.outputs.skip != 'true' && steps.config.outputs.make_default == 'true' }}
+        uses: sdkman/sdkman-default-action@main
+        with:
+          SDKMAN_CONSUMER_KEY: ${{ secrets.SDKMAN_CONSUMER_KEY }}
+          SDKMAN_CONSUMER_TOKEN: ${{ secrets.SDKMAN_CONSUMER_TOKEN }}
+          SDKMAN_CANDIDATE: maven
+          SDKMAN_CANDIDATE_VERSION: ${{ steps.config.outputs.maven_version }}
