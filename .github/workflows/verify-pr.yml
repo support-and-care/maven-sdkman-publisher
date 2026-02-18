@@ -5,12 +5,15 @@ on:
     paths:
       - "versions/maven.json"
 
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Read version file
         id: config
@@ -21,8 +24,14 @@ jobs:
             echo "::error::No version specified in versions/maven.json"
             exit 1
           fi
-          echo "maven_version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "make_default=${MAKE_DEFAULT}" >> "$GITHUB_OUTPUT"
+          VERSION="${VERSION//$'\n'/}"
+          VERSION="${VERSION//$'\r'/}"
+          MAKE_DEFAULT="${MAKE_DEFAULT//$'\n'/}"
+          MAKE_DEFAULT="${MAKE_DEFAULT//$'\r'/}"
+          {
+            echo "maven_version=${VERSION}"
+            echo "make_default=${MAKE_DEFAULT}"
+          } >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, make_default: ${MAKE_DEFAULT}"
 
       - name: Validate version format

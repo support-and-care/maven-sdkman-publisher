@@ -18,12 +18,15 @@ on:
     paths:
       - "versions/maven.json"
 
+permissions:
+  contents: read
+
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Determine version
         id: config
@@ -40,12 +43,25 @@ jobs:
             echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          VERSION="${VERSION//$'\n'/}"
+          VERSION="${VERSION//$'\r'/}"
+          MAKE_DEFAULT="${MAKE_DEFAULT//$'\n'/}"
+          MAKE_DEFAULT="${MAKE_DEFAULT//$'\r'/}"
           {
             echo "skip=false"
             echo "maven_version=${VERSION}"
             echo "make_default=${MAKE_DEFAULT}"
           } >> "$GITHUB_OUTPUT"
           echo "Version: ${VERSION}, make_default: ${MAKE_DEFAULT}"
+
+      - name: Validate version format
+        if: steps.config.outputs.skip != 'true'
+        run: |
+          VERSION="${{ steps.config.outputs.maven_version }}"
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+(-.+)?$'; then
+            echo "::error::Invalid version format '${VERSION}' — expected e.g., 4.0.0 or 4.0.0-rc-6"
+            exit 1
+          fi
 
       - name: Derive download URL
         if: steps.config.outputs.skip != 'true'
@@ -71,7 +87,7 @@ jobs:
 
       - name: Release to SDKman
         if: steps.config.outputs.skip != 'true'
-        uses: sdkman/sdkman-release-action@main
+        uses: sdkman/sdkman-release-action@0c5e8067fd8e3577e29e279eb91f9044c438b0c9 # main
         with:
           SDKMAN_CONSUMER_KEY: ${{ secrets.SDKMAN_CONSUMER_KEY }}
           SDKMAN_CONSUMER_TOKEN: ${{ secrets.SDKMAN_CONSUMER_TOKEN }}
@@ -82,7 +98,7 @@ jobs:
 
       - name: Set as SDKman default
         if: ${{ steps.config.outputs.skip != 'true' && steps.config.outputs.make_default == 'true' }}
-        uses: sdkman/sdkman-default-action@main
+        uses: sdkman/sdkman-default-action@38ca710dbacfada85ccfb609953e4c92a717e557 # main
         with:
           SDKMAN_CONSUMER_KEY: ${{ secrets.SDKMAN_CONSUMER_KEY }}
           SDKMAN_CONSUMER_TOKEN: ${{ secrets.SDKMAN_CONSUMER_TOKEN }}
