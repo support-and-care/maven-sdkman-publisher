@@ -68,8 +68,7 @@ jobs:
         id: url
         run: |
           VERSION="${{ steps.config.outputs.maven_version }}"
-          MAJOR="${VERSION%%.*}"
-          URL="https://dlcdn.apache.org/maven/maven-${MAJOR}/${VERSION}/binaries/apache-maven-${VERSION}-bin.tar.gz"
+          URL="https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${VERSION}/apache-maven-${VERSION}-bin.zip"
           echo "download_url=${URL}" >> "$GITHUB_OUTPUT"
           echo "Download URL: ${URL}"
 
@@ -78,10 +77,9 @@ jobs:
         run: |
           URL="${{ steps.url.outputs.download_url }}"
           VERSION="${{ steps.config.outputs.maven_version }}"
-          MAJOR="${VERSION%%.*}"
           if ! curl --head --fail --silent --show-error "$URL"; then
             echo "::error::Maven version ${VERSION} not found — download URL does not exist: ${URL}"
-            echo "Please verify that version ${VERSION} has been released at https://dlcdn.apache.org/maven/maven-${MAJOR}/${VERSION}/"
+            echo "Please verify that version ${VERSION} has been released at https://repo.maven.apache.org/maven2/org/apache/maven/apache-maven/${VERSION}/"
             exit 1
           fi
 
